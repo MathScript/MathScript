@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@types/node": "^14.0.26",
+    "typescript": "^3.9.7"
+  },
+  "scripts": {
+    "compile": "tsc compile.ts && node compile.js"
+  }
+}
