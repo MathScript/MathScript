@@ -1,22 +1,48 @@
 import * as ts from "typescript"
 
-export function visitChildren(node: ts.Node, visitor: ts.Visitor)
+export function rewriteNode(node: ts.Node, visitor: ts.Visitor): ts.Node
+{
+    const newNode = visitor(node)
+
+    if (newNode === node)
+        return node
+
+    if (Array.isArray(newNode))
+        throw new TypeError("Visitor returned an array – this isn't supported yet.")
+
+    newNode.parent = node.parent;
+    newNode.flags = node.flags;
+    newNode.pos = node.pos;
+    newNode.end = node.end;
+
+    Object.getOwnPropertyNames(node).forEach(prop => {
+        delete node[prop];
+    });
+
+    Object.getOwnPropertyNames(newNode).forEach(prop => {
+        node[prop] = newNode[prop];
+    });
+
+    return node;
+}
+
+export function rewriteChildren(node: ts.Node, visitor: ts.Visitor)
 {
     for (const prop of possibleChildProperties)
     {
         if (node[prop] !== undefined)
         {
             if (Array.isArray(node[prop]))
-                node[prop] = node[prop].map(visitor)
+                node[prop].forEach(n => rewriteNode(n, visitor))
             else
-                node[prop] = visitor(node[prop])
+                rewriteNode(node[prop], visitor)
         }
     }
 
     return node
 }
 
-const possibleChildProperties = <const>[
+export const possibleChildProperties = <const>[
     'typeArguments', 'left', 'right', 'expression', 'name',
     'constraint', 'default', 'decorators',  'modifiers',
     'dotDotDotToken', 'questionToken', 'exclamationToken',

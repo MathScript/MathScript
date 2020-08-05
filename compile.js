@@ -1,21 +1,14 @@
 "use strict";
+var _a;
 exports.__esModule = true;
 var ts = require("typescript");
 var visit_1 = require("./visit");
-var noop = new Proxy(function () { return noop; }, { get: function () { return noop; } });
 function compile(fileNames, options) {
     var program = ts.createProgram(fileNames, options);
-    var inputFiles = program.getSourceFiles();
-    var outputFiles = [];
-    for (var _i = 0, inputFiles_1 = inputFiles; _i < inputFiles_1.length; _i++) {
-        var input = inputFiles_1[_i];
-        if (input.fileName.endsWith('.m.ts')) {
-            var output = ts.visitNode(input, visitor);
-            outputFiles.push(output);
-        }
-        else {
-            outputFiles.push(input);
-        }
+    for (var _i = 0, _a = program.getSourceFiles(); _i < _a.length; _i++) {
+        var input = _a[_i];
+        if (input.fileName.endsWith('.m.ts'))
+            visit_1.rewriteNode(input, visitor);
     }
     console.log("<PRE-EMIT>");
     logDiagnostics(ts.getPreEmitDiagnostics(program));
@@ -26,30 +19,22 @@ function compile(fileNames, options) {
     console.log("Process exiting with code '" + exitCode + "'.");
     process.exit(exitCode);
 }
+var operatorNameMap = (_a = {},
+    _a[ts.SyntaxKind.PlusToken] = 'op_plus',
+    _a[ts.SyntaxKind.MinusToken] = 'op_minus',
+    _a[ts.SyntaxKind.AsteriskToken] = 'op_asterisk',
+    _a[ts.SyntaxKind.SlashToken] = 'op_slash',
+    _a);
 function visitor(node) {
-    console.log("NODE: " + ts.SyntaxKind[node.kind]);
     if (node.kind === ts.SyntaxKind.BinaryExpression) {
         var expr = node;
-        var fnName = void 0;
-        switch (expr.operatorToken.kind) {
-            case ts.SyntaxKind.PlusToken:
-                fnName = 'op_plus';
-                break;
-            case ts.SyntaxKind.MinusToken:
-                fnName = 'op_minus';
-                break;
-            case ts.SyntaxKind.AsteriskToken:
-                fnName = 'op_asterisk';
-                break;
-            case ts.SyntaxKind.SlashToken:
-                fnName = 'op_slash';
-                break;
-        }
-        if (fnName !== undefined) {
-            return ts.createCall(ts.createIdentifier(fnName), [], [expr.left, expr.right]);
+        var name_1 = operatorNameMap[expr.operatorToken.kind];
+        if (name_1 !== undefined) {
+            var identifier = ts.createIdentifier(name_1);
+            return ts.createCall(identifier, undefined, [expr.left, expr.right]);
         }
     }
-    return visit_1.visitChildren(node, visitor);
+    return visit_1.rewriteChildren(node, visitor);
 }
 function logDiagnostics(arr) {
     for (var _i = 0, arr_1 = arr; _i < arr_1.length; _i++) {

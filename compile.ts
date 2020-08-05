@@ -1,29 +1,14 @@
 import * as ts from "typescript"
-import { visitChildren } from "./visit";
+import { rewriteNode, rewriteChildren } from "./visit";
 
-
-const noop = new Proxy(() => noop, { get: () => noop })
 
 function compile(fileNames: string[], options: ts.CompilerOptions): void
 {
   let program = ts.createProgram(fileNames, options)
 
-  let inputFiles = program.getSourceFiles()
-  let outputFiles: ts.SourceFile[] = []
-
-
-  for (let input of inputFiles)
-  {
-    if (input.fileName.endsWith('.m.ts'))
-    {
-      let output = ts.visitNode(input, visitor)
-      outputFiles.push(output)
-    }
-    else
-    {
-      outputFiles.push(input)
-    }
-  }
+  for (let input of program.getSourceFiles())
+  if (input.fileName.endsWith('.m.ts'))
+    rewriteNode(input, visitor)
 
 
   console.log("<PRE-EMIT>")
@@ -39,40 +24,26 @@ function compile(fileNames: string[], options: ts.CompilerOptions): void
   process.exit(exitCode)
 }
 
-function visitor(node: ts.Node): ts.Node
-{
-  console.log(`NODE: ${ts.SyntaxKind[node.kind]}`)
+
+const operatorNameMap: { [op in ts.SyntaxKind]?: string } = {
+  [ts.SyntaxKind.PlusToken]: 'op_plus',
+  [ts.SyntaxKind.MinusToken]: 'op_minus',
+  [ts.SyntaxKind.AsteriskToken]: 'op_asterisk',
+  [ts.SyntaxKind.SlashToken]: 'op_slash'
+}
+
+function visitor(node: ts.Node): ts.Node {
   if (node.kind === ts.SyntaxKind.BinaryExpression) {
-    let expr = node as ts.BinaryExpression
+    let expr = node as ts.BinaryExpression;
+    const name = operatorNameMap[expr.operatorToken.kind]
 
-    let fnName: string | undefined
-
-    switch (expr.operatorToken.kind)
-    {
-      case ts.SyntaxKind.PlusToken:
-        fnName = 'op_plus'
-        break
-
-      case ts.SyntaxKind.MinusToken:
-        fnName = 'op_minus'
-        break
-
-      case ts.SyntaxKind.AsteriskToken:
-        fnName = 'op_asterisk'
-        break
-
-      case ts.SyntaxKind.SlashToken:
-        fnName = 'op_slash'
-        break
-    }
-
-    if (fnName !== undefined)
-    {
-      return ts.createCall(ts.createIdentifier(fnName), [], [expr.left, expr.right])
+    if (name !== undefined) {
+      const identifier = ts.createIdentifier(name);
+      return ts.createCall(identifier, undefined, [expr.left, expr.right]);
     }
   }
 
-  return visitChildren(node, visitor)
+  return rewriteChildren(node, visitor);
 }
 
 function logDiagnostics(arr: readonly ts.Diagnostic[])
